@@ -1,0 +1,29 @@
+def phone_agent(battery, storage, phone_temperature):​
+
+    if phone_temperature > 45 and storage > 90:​
+
+        return "ERROR: Phone is too hot and storage is full"​
+
+    elif phone_temperature > 45 and battery < 20:​
+
+        return "ERROR: Phone is too hot and battery is low"​
+
+    elif battery < 20 and storage > 90:​
+
+        return "WARNING: Battery is low and storage is full"​
+
+    elif phone_temperature > 45:​
+
+        return "Phone is too hot"​
+
+    elif storage > 90:​
+
+        return "Clean storage"​
+
+    elif battery < 20:​
+
+        return "Power saving mode ON"​
+
+    else:​
+
+        return "Phone is working normally"​
