@@ -1,0 +1,77 @@
+def bayes(prior_o, likelihood_o, likelihood_c):
+    """Сенсор хабарынан кейінгі кедергі ықтималдығы."""
+    score_o = prior_o * likelihood_o
+    score_c = (1.0 - prior_o) * likelihood_c
+    total = score_o + score_c
+    if total == 0:
+        raise ValueError("The observation has zero probability.")
+    return score_o / total
+
+
+def hmm_filter(readings, prior_o=0.30, false_alarm=0.20,
+               transition_before_first=False):
+    """Әр қадамның болжамын, салмағын және нәтижесін қайтарады."""
+    emission = {
+        "BLOCKED": (0.80, false_alarm),
+        "CLEAR": (0.20, 1.0 - false_alarm),
+    }
+    posterior_o = prior_o
+    rows = []
+    for t, reading in enumerate(readings, start=1):
+        if t == 1 and not transition_before_first:
+            predicted_o = posterior_o
+        else:
+            predicted_o = (0.70 * posterior_o
+                           + 0.20 * (1.0 - posterior_o))
+        likelihood_o, likelihood_c = emission[reading]
+        score_o = predicted_o * likelihood_o
+        score_c = (1.0 - predicted_o) * likelihood_c
+        total = score_o + score_c
+        posterior_o = bayes(predicted_o, likelihood_o, likelihood_c)
+        rows.append({
+            "t": t, "reading": reading,
+            "predicted_o": predicted_o,
+            "score_o": score_o, "score_c": score_c, "total": total,
+            "posterior_o": posterior_o,
+            "posterior_c": 1.0 - posterior_o,
+        })
+    return rows
+
+
+def main():
+    print("A. Single sensor reading")
+    print(f"P(O | BLOCKED) = {bayes(0.30, 0.80, 0.20):.6f}")
+    print(f"P(O | CLEAR)   = {bayes(0.30, 0.20, 0.80):.6f}")
+
+    readings = ["BLOCKED", "CLEAR", "BLOCKED", "BLOCKED"]
+    rows = hmm_filter(readings)
+    print("\nC. HMM: no transition before t1")
+    print("t  reading   predicted_O  updated_O  updated_C")
+    for row in rows:
+        print(f"{row['t']}  {row['reading']:7s}   "
+              f"{row['predicted_o']:.6f}     "
+              f"{row['posterior_o']:.6f}   "
+              f"{row['posterior_c']:.6f}")
+
+    print("\nD1. Prior experiment: one BLOCKED reading")
+    print("prior_O  P(O | BLOCKED)")
+    for prior in (0.10, 0.30, 0.50, 0.60, 0.70):
+        print(f"{prior:.2f}     {bayes(prior, 0.80, 0.20):.6f}")
+
+    print("\nD2. False alarm experiment: prior_O = 0.30")
+    print("false_alarm  P(CLEAR | C)  P(O | BLOCKED)")
+    for false_alarm in (0.20, 0.40):
+        print(f"{false_alarm:.2f}         {1-false_alarm:.2f}"
+              f"           {bayes(0.30, 0.80, false_alarm):.6f}")
+
+    alternative = ["CLEAR", "CLEAR", "BLOCKED", "CLEAR"]
+    print("\nAdditional HMM comparison: final P(O)")
+    print(f"Base readings:        {rows[-1]['posterior_o']:.6f}")
+    result = hmm_filter(alternative)
+    print(f"Alternative readings: {result[-1]['posterior_o']:.6f}")
+    result = hmm_filter(readings, transition_before_first=True)
+    print(f"Slides convention:    {result[-1]['posterior_o']:.6f}")
+
+
+if __name__ == "__main__":
+    main()
