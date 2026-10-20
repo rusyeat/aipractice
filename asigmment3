@@ -1,0 +1,108 @@
+"""Assignment 3: Bayes, sensitivity analysis and HMM filtering.
+
+Run: python assignment_3.py
+Only the Python standard library is required.
+State order: (HAZARD, SAFE). The initial distribution belongs to t1.
+"""
+
+from itertools import product
+from math import isclose, prod
+
+PRIOR = (0.20, 0.80)
+TRANSITION = ((0.80, 0.20), (0.10, 0.90))
+EMISSION = {"ALARM": (0.90, 0.10), "NORMAL": (0.10, 0.90)}
+OBSERVATIONS = ("ALARM", "NORMAL", "ALARM", "ALARM")
+
+
+def bayes(prior_h, observation):
+    """Return P(HAZARD | observation) for a single observation."""
+    if not 0 <= prior_h <= 1:
+        raise ValueError("prior_h must be between 0 and 1")
+    lh, ls = EMISSION[observation]
+    evidence = prior_h * lh + (1 - prior_h) * ls
+    if evidence == 0:
+        raise ValueError("The observation has zero probability")
+    return prior_h * lh / evidence
+
+
+def hmm_filter(observations, initial=PRIOR, transition_first=False):
+    """Return prediction, unnormalized weights, Z and posterior per step.
+
+    transition_first=False: initial = P(X_1), the usual HMM convention.
+    transition_first=True: initial = P(X_0), an alternative time convention.
+    """
+    posterior = tuple(initial)
+    if (len(posterior) != 2 or min(posterior) < 0
+            or not isclose(sum(posterior), 1.0)):
+        raise ValueError("initial must be a probability pair")
+    rows = []
+    for t, obs in enumerate(observations, start=1):
+        if t == 1 and not transition_first:
+            predicted = posterior
+        else:
+            predicted = tuple(
+                sum(posterior[i] * TRANSITION[i][j] for i in range(2))
+                for j in range(2)
+            )
+        weights = tuple(predicted[j] * EMISSION[obs][j] for j in range(2))
+        z = sum(weights)
+        if z == 0:
+            raise ValueError("The observation has zero probability")
+        posterior = tuple(w / z for w in weights)
+        rows.append(dict(t=t, observation=obs, predicted=predicted,
+                         weights=weights, z=z, posterior=posterior))
+    return rows
+
+
+def enumerate_posterior(observations):
+    """Independent check: sum joint probabilities of all hidden paths."""
+    if not observations:
+        raise ValueError("At least one observation is required")
+    mass = [0.0, 0.0]
+    for path in product(range(2), repeat=len(observations)):
+        joint = PRIOR[path[0]] * EMISSION[observations[0]][path[0]]
+        for t in range(1, len(observations)):
+            joint *= TRANSITION[path[t - 1]][path[t]]
+            joint *= EMISSION[observations[t]][path[t]]
+        mass[path[-1]] += joint
+    return tuple(x / sum(mass) for x in mass), sum(mass)
+
+
+def verify():
+    assert isclose(bayes(0.20, "ALARM"), 9 / 13, abs_tol=1e-12)
+    assert isclose(bayes(0.20, "NORMAL"), 1 / 37, abs_tol=1e-12)
+    rows = hmm_filter(OBSERVATIONS)
+    for t, row in enumerate(rows, start=1):
+        expected, evidence = enumerate_posterior(OBSERVATIONS[:t])
+        assert isclose(sum(row["posterior"]), 1.0, abs_tol=1e-12)
+        assert all(isclose(a, b, abs_tol=1e-12)
+                   for a, b in zip(row["posterior"], expected))
+        assert isclose(prod(r["z"] for r in rows[:t]),
+                       evidence, abs_tol=1e-12)
+    return rows
+
+
+def main():
+    rows = verify()
+    print("BAYES")
+    for obs in EMISSION:
+        print(f"{obs:6s} P(H|E)={bayes(PRIOR[0], obs):.8f}")
+    print("\nSENSITIVITY: prior P(H|ALARM) P(H|NORMAL)")
+    for p in (0.05, 0.20, 0.50, 0.80):
+        print(f"{p:.2f} {bayes(p, 'ALARM'):.8f} "
+              f"{bayes(p, 'NORMAL'):.8f}")
+    print("\nHMM: t obs predicted_H predicted_S posterior_H posterior_S Z")
+    for r in rows:
+        values = (*r["predicted"], *r["posterior"], r["z"])
+        print(r["t"], r["observation"], *(f"{v:.8f}" for v in values))
+    _, evidence = enumerate_posterior(OBSERVATIONS)
+    alternative = hmm_filter(OBSERVATIONS, transition_first=True)
+    print(f"\nP(observation sequence)={evidence:.8f}")
+    print(f"Alternative P(X_0) convention: P(H_4|E)="
+          f"{alternative[-1]['posterior'][0]:.8f}")
+    print("Verification passed: Bayes fractions, normalization, "
+          "all path sums and sequence likelihood.")
+
+
+if __name__ == "__main__":
+    main()
