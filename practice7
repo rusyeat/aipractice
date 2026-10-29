@@ -1,0 +1,43 @@
+# 7-практика: Жасырын Марков модельдері (HMM)
+# Орындаған: Байұзақ Руслан, AIF1
+
+states = ["A", "B", "C"]
+T = [[0.7, 0.3, 0.0],
+     [0.2, 0.6, 0.2],
+     [0.0, 0.3, 0.7]]
+emission = {"RED": [0.8, 0.5, 0.2], "BLUE": [0.2, 0.5, 0.8]}
+b0 = [0.5, 0.3, 0.2]
+readings = ["RED", "BLUE", "BLUE", "RED"]
+
+def check_rows(matrix, name):
+    for row in matrix:
+        assert abs(sum(row) - 1.0) < 1e-9, f"{name}: жол қосындысы 1 емес"
+
+def predict(b, T):
+    # Болжау: b_t^-(j) = sum_i b_{t-1}(i) * T[i][j]
+    return [sum(b[i] * T[i][j] for i in range(3)) for j in range(3)]
+
+def update(pred, likelihood):
+    # Жаңарту: b_t(j) ~ P(E_t | j) * b_t^-(j), содан кейін нормалау
+    weights = [pred[i] * likelihood[i] for i in range(3)]
+    total = sum(weights)
+    return [w / total for w in weights]
+
+def run_filter(belief, emission, title):
+    print(title)
+    for t, reading in enumerate(readings, start=1):
+        belief = update(predict(belief, T), emission[reading])
+        best = states[belief.index(max(belief))]
+        probs = ", ".join(f"{s}={p:.4f}" for s, p in zip(states, belief))
+        print(f"t={t} {reading:<4} -> {probs} | ең ықтимал: {best}")
+    return belief
+
+check_rows(T, "T")
+check_rows([[emission["RED"][i], emission["BLUE"][i]] for i in range(3)], "O")
+
+run_filter(b0, emission, "Негізгі жағдай")
+
+# 6-тапсырма: эксперименттер
+run_filter([0.2, 0.2, 0.6], emission, "Эксперимент 1: b0 = [0.2, 0.2, 0.6]")
+weak = {"RED": [0.6, 0.5, 0.4], "BLUE": [0.4, 0.5, 0.6]}
+run_filter(b0, weak, "Эксперимент 2: әлсіз датчик RED = [0.6, 0.5, 0.4]")
