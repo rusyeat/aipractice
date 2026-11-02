@@ -1,0 +1,106 @@
+# 8 практикалық жұмыс
+# Байұзақ Руслан, AIF_3
+# Қажетті пакеттер: numpy, scikit-learn
+# Орнату: python -m pip install numpy scikit-learn
+
+import numpy as np
+from sklearn.linear_model import LinearRegression, LogisticRegression
+from sklearn.pipeline import make_pipeline
+from sklearn.preprocessing import StandardScaler
+
+
+def percent(value):
+    return f"{100 * value:.1f}%".replace(".", ",")
+
+
+print("1 тапсырма. Naive Bayes")
+p_high_prior = 6 / 12
+p_low_prior = 6 / 12
+score_high = p_high_prior * (5 / 6) * (4 / 6)
+score_low = p_low_prior * (2 / 6) * (1 / 6)
+p_high = score_high / (score_high + score_low)
+p_low = 1 - p_high
+print("P(High), P(Low):", percent(p_high_prior), percent(p_low_prior))
+print("Cold | High, Rain | High:", percent(5 / 6), percent(4 / 6))
+print("Cold | Low, Rain | Low:", percent(2 / 6), percent(1 / 6))
+print("Score(High), Score(Low):", score_high, score_low)
+print("Суық, жаңбырлы күн:", percent(p_high), percent(p_low))
+
+score_high_dry = p_high_prior * (5 / 6) * (1 - 4 / 6)
+score_low_dry = p_low_prior * (2 / 6) * (1 - 1 / 6)
+p_high_dry = score_high_dry / (score_high_dry + score_low_dry)
+print("Жаңбырсыз күннің Score мәндері:", score_high_dry, score_low_dry)
+print("Суық, жаңбырсыз күн:", percent(p_high_dry), percent(1 - p_high_dry))
+print("Лаплас Event=1:", percent((0 + 1) / (6 + 2)))
+print("Лаплас Event=0:", percent((6 + 1) / (6 + 2)))
+
+print("\n2 тапсырма. Күтілетін шығын және пайдалылық")
+el_extra = p_low * 60
+el_usual = p_high * 30
+print(f"EL(Extra) = {el_extra:.2f}; EL(Usual) = {el_usual:.2f}")
+actions = {
+    "Extra": ([p_high, p_low], [0, -60]),
+    "Usual": ([p_high, p_low], [-30, 0]),
+}
+
+
+def EU(probs, utilities):
+    return sum(p * u for p, u in zip(probs, utilities))
+
+
+scores = {name: EU(*values) for name, values in actions.items()}
+for name, value in scores.items():
+    print(f"EU({name}) = {value:.2f}")
+print("Таңдау:", max(scores, key=scores.get))
+threshold = 60 / (60 + 30)
+print("Extra әрекетінің шегі: p >", percent(threshold))
+print(f"Жаңбырсыз күн: EL(Extra)={60 * (1-p_high_dry):.2f}; "
+      f"EL(Usual)={30 * p_high_dry:.2f}; таңдау: Usual")
+
+print("\n3A тапсырма. Сызықтық регрессия")
+X = np.array([100, 150, 200, 250, 300]).reshape(-1, 1)
+y = np.array([29, 41, 53, 66, 78])
+linear_model = LinearRegression()
+linear_model.fit(X, y)
+print("w:", linear_model.coef_)
+print("b:", linear_model.intercept_)
+print("180 келуші үшін:", linear_model.predict([[180]]))
+pred_first_two = linear_model.predict(X[:2])
+residuals = y[:2] - pred_first_two
+print("Алғашқы екі болжам:", pred_first_two)
+print("Қалдық қателер:", residuals)
+print("Алғашқы екі бақылаудың MSE:", np.mean(residuals ** 2))
+for name, w, b in [("A", 0.20, 10), ("B", 0.25, 5)]:
+    pred = w * X[:2, 0] + b
+    mse = np.mean((y[:2] - pred) ** 2)
+    print(name, "болжамдар:", pred, "MSE:", mse)
+
+print("\n3B тапсырма. Логистикалық регрессия")
+X_train = np.array([
+    [1, 1], [1, 1], [1, 1],
+    [1, 0], [1, 0], [0, 1],
+    [1, 1], [1, 0], [0, 0],
+    [0, 0], [0, 0], [0, 0],
+])
+y_train = np.array([1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0])
+# Бұл екі жағдайда нақты жауаптар жоқ, сондықтан accuracy есептелмейді.
+X_test = np.array([[1, 1], [1, 0]])
+logistic_model = make_pipeline(StandardScaler(), LogisticRegression())
+logistic_model.fit(X_train, y_train)
+p = logistic_model.predict_proba(X_test)[:, 1]
+alerts = (p >= 0.50).astype(int)
+print("p:", p)
+print("High ықтималдықтары:", [percent(v) for v in p])
+print("alerts:", alerts)
+
+print("\n4 тапсырма. Модельді бағалау")
+TP, FP, FN, TN = 21, 9, 3, 27
+accuracy = (TP + TN) / (TP + FP + FN + TN)
+precision = TP / (TP + FP)
+recall = TP / (TP + FN)
+f1 = 2 * precision * recall / (precision + recall)
+for name, value in [("Accuracy", accuracy), ("Precision", precision),
+                    ("Recall", recall), ("F1", f1)]:
+    print(name, percent(value))
+print("Барлық күнді Low деп болжау: TP=0, FP=0, FN=5, TN=45")
+print("Accuracy:", percent(45 / 50), "High Recall:", percent(0 / 5))
